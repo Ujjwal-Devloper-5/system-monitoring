@@ -39,6 +39,8 @@ scrape_configs:
   # ─────────────────────────
   # HOST SYSTEM METRICS (Node Exporter)
   # ─────────────────────────
+  # Note: On Linux, use Docker bridge IP (172.17.0.1) to access host services
+  # Node Exporter must be running on host: sudo systemctl status node_exporter
   - job_name: "system-node"
     static_configs:
       - targets: ["host.docker.internal:9100"]
