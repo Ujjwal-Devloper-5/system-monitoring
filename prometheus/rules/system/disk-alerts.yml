@@ -1,0 +1,228 @@
+groups:
+- name: disk-monitoring
+  interval: 30s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # DISK SPACE ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: DiskSpaceWarning
+    expr: |
+      (
+        node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"} 
+        / 
+        node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"}
+      ) * 100 < 20
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Disk space available: {{ $value | humanizePercentage }} (threshold: <20%)\nMountpoint: {{ $labels.mountpoint }}\nDevice: {{ $labels.device }}\nFilesystem: {{ $labels.fstype }}"
+      impact: "Disk filling up, may cause issues soon"
+      action: "Clean up old files or expand disk"
+
+  - alert: DiskSpaceCritical
+    expr: |
+      (
+        node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"} 
+        / 
+        node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"}
+      ) * 100 < 10
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "CRITICAL: Disk almost full on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Disk space available: {{ $value | humanizePercentage }} (threshold: <10%)\nMountpoint: {{ $labels.mountpoint }}\nDevice: {{ $labels.device }}"
+      impact: "Disk almost full, applications may fail"
+      action: "IMMEDIATE: Free up disk space now"
+
+  - alert: DiskAlmostFull
+    expr: |
+      (
+        node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"} 
+        / 
+        node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"}
+      ) * 100 < 5
+    for: 1m
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "CRITICAL: Disk critically full on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Disk space available: {{ $value | humanizePercentage }} (threshold: <5%)\nMountpoint: {{ $labels.mountpoint }}"
+      impact: "Disk critically full, system may become unstable"
+      action: "EMERGENCY: Free disk space immediately"
+
+  # ═══════════════════════════════════════════════════════════
+  # INODE EXHAUSTION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: InodeUsageHigh
+    expr: |
+      (
+        node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs|iso9660"} 
+        / 
+        node_filesystem_files{fstype!~"tmpfs|overlay|squashfs|iso9660"}
+      ) * 100 < 20
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "High inode usage on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Inodes available: {{ $value | humanizePercentage }} (threshold: <20%)\nMountpoint: {{ $labels.mountpoint }}"
+      impact: "Running out of inodes, cannot create new files"
+      action: "Delete unnecessary files or increase inode count"
+
+  - alert: InodeExhaustion
+    expr: |
+      (
+        node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs|iso9660"} 
+        / 
+        node_filesystem_files{fstype!~"tmpfs|overlay|squashfs|iso9660"}
+      ) * 100 < 5
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "CRITICAL: Inode exhaustion on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Inodes available: {{ $value | humanizePercentage }} (threshold: <5%)\nMountpoint: {{ $labels.mountpoint }}"
+      impact: "Cannot create new files even if space available"
+      action: "IMMEDIATE: Delete files to free inodes"
+
+  # ═══════════════════════════════════════════════════════════
+  # DISK I/O SATURATION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: DiskIOSaturation
+    expr: |
+      rate(node_disk_io_time_seconds_total[5m]) > 0.9
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "Disk I/O saturation on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Disk I/O utilization: {{ $value | humanizePercentage }} (threshold: >90%)\nDevice: {{ $labels.device }}"
+      impact: "Disk is saturated, I/O operations are slow"
+      action: "Identify I/O intensive processes with 'iotop'"
+
+  # ═══════════════════════════════════════════════════════════
+  # HIGH DISK LATENCY
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighDiskReadLatency
+    expr: |
+      rate(node_disk_read_time_seconds_total[5m]) 
+      / 
+      rate(node_disk_reads_completed_total[5m]) > 0.1
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "High disk read latency on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Average read latency: {{ $value | humanizeDuration }} (threshold: >100ms)\nDevice: {{ $labels.device }}"
+      impact: "Slow disk reads affecting performance"
+      action: "Check disk health with 'smartctl -a /dev/{{ $labels.device }}'"
+
+  - alert: HighDiskWriteLatency
+    expr: |
+      rate(node_disk_write_time_seconds_total[5m]) 
+      / 
+      rate(node_disk_writes_completed_total[5m]) > 0.1
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "High disk write latency on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Average write latency: {{ $value | humanizeDuration }} (threshold: >100ms)\nDevice: {{ $labels.device }}"
+      impact: "Slow disk writes affecting performance"
+      action: "Check disk health and I/O patterns"
+
+  # ═══════════════════════════════════════════════════════════
+  # DISK READ/WRITE ERRORS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: DiskReadErrors
+    expr: |
+      increase(node_disk_read_errors_total[5m]) > 0
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "Disk read errors on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value }} read errors detected in last 5 minutes\nDevice: {{ $labels.device }}"
+      impact: "Disk hardware failure possible, data corruption risk"
+      action: "IMMEDIATE: Check disk health, prepare for disk replacement"
+
+  - alert: DiskWriteErrors
+    expr: |
+      increase(node_disk_write_errors_total[5m]) > 0
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "Disk write errors on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value }} write errors detected in last 5 minutes\nDevice: {{ $labels.device }}"
+      impact: "Disk hardware failure possible, data loss risk"
+      action: "IMMEDIATE: Check disk health, backup data, prepare replacement"
+
+  # ═══════════════════════════════════════════════════════════
+  # FILESYSTEM READ-ONLY
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: FilesystemReadOnly
+    expr: |
+      node_filesystem_readonly{fstype!~"tmpfs|overlay|squashfs|iso9660"} == 1
+    for: 1m
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+    annotations:
+      summary: "Filesystem mounted read-only on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Filesystem has been remounted read-only, likely due to errors\nMountpoint: {{ $labels.mountpoint }}\nDevice: {{ $labels.device }}"
+      impact: "Cannot write to filesystem, applications will fail"
+      action: "IMMEDIATE: Check filesystem errors with 'dmesg' and 'fsck'"
+
+  # ═══════════════════════════════════════════════════════════
+  # DISK FILLING UP FAST
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: DiskFillingUpFast
+    expr: |
+      (
+        predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"}[1h], 4*3600) < 0
+      )
+      and
+      (
+        node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|iso9660"} < 0.4
+      )
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: disk
+    annotations:
+      summary: "Disk filling up rapidly on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+      description: "Disk predicted to fill in <4 hours at current rate\nMountpoint: {{ $labels.mountpoint }}"
+      impact: "Disk will fill soon if trend continues"
+      action: "Investigate what is consuming disk space rapidly"

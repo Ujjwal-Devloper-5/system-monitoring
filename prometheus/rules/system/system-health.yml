@@ -1,0 +1,66 @@
+groups:
+- name: system-health-legacy
+  interval: 30s
+  rules:
+
+  # NOTE: These are the original alerts, kept for backwards compatibility
+  # New comprehensive alerts are in separate files:
+  # - cpu-alerts.yml
+  # - memory-alerts.yml
+  # - disk-alerts.yml
+  # - network-alerts.yml
+  # - system-alerts.yml
+  # - service-alerts.yml
+
+  - alert: HighCPUUsageLegacy
+    expr: avg(rate(node_cpu_seconds_total{mode!="idle"}[2m])) > 0.9
+    for: 2m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+      legacy: "true"
+    annotations:
+      summary: "High CPU usage (legacy alert)"
+      description: "CPU usage > 90% for 2 minutes\nInstance: {{ $labels.instance }}"
+      action: "Check cpu-alerts.yml for more detailed CPU monitoring"
+
+  - alert: HighMemoryUsageLegacy
+    expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+    for: 2m
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+      legacy: "true"
+    annotations:
+      summary: "High memory usage (legacy alert)"
+      description: "Memory usage > 90%\nInstance: {{ $labels.instance }}"
+      action: "Check memory-alerts.yml for more detailed memory monitoring"
+
+  - alert: DiskAlmostFullLegacy
+    expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} /
+           node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.1
+    for: 5m
+    labels:
+      severity: critical
+      domain: system
+      category: disk
+      legacy: "true"
+    annotations:
+      summary: "Disk almost full (legacy alert)"
+      description: "Less than 10% disk space remaining\nMountpoint: {{ $labels.mountpoint }}"
+      action: "Check disk-alerts.yml for more detailed disk monitoring"
+
+  - alert: SystemLoadHighLegacy
+    expr: node_load15 / count(node_cpu_seconds_total{mode="system"}) > 1.5
+    for: 3m
+    labels:
+      severity: warning
+      domain: system
+      category: load
+      legacy: "true"
+    annotations:
+      summary: "High system load (legacy alert)"
+      description: "Load average too high relative to CPU cores\nInstance: {{ $labels.instance }}"
+      action: "Check system-alerts.yml for more detailed load monitoring"

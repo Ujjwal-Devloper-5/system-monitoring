@@ -1,0 +1,37 @@
+# Environment variables with sensitive credentials
+.env
+
+# Backup files
+backups/
+*.tar.gz
+*.backup
+
+# Grafana data (stored in Docker volumes)
+grafana/data/
+
+# Prometheus data (stored in Docker volumes)
+prometheus/data/
+
+# Loki data (stored in Docker volumes)
+loki/data/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Log files
+*.log
+
+# Docker override files (for local development)
+docker-compose.override.yml

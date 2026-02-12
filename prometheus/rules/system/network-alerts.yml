@@ -1,0 +1,172 @@
+groups:
+- name: network-monitoring
+  interval: 30s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # NETWORK BANDWIDTH ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighNetworkReceive
+    expr: |
+      rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 100000000
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "High network receive rate on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Receiving {{ $value | humanize }}B/s (threshold: 100MB/s)\nInterface: {{ $labels.device }}"
+      impact: "High inbound network traffic"
+      action: "Monitor network usage patterns"
+
+  - alert: HighNetworkTransmit
+    expr: |
+      rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 100000000
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "High network transmit rate on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Transmitting {{ $value | humanize }}B/s (threshold: 100MB/s)\nInterface: {{ $labels.device }}"
+      impact: "High outbound network traffic"
+      action: "Monitor network usage patterns"
+
+  # ═══════════════════════════════════════════════════════════
+  # NETWORK ERRORS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: NetworkReceiveErrors
+    expr: |
+      rate(node_network_receive_errs_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 10
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "Network receive errors on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value | humanize }} receive errors/sec (threshold: 10/sec)\nInterface: {{ $labels.device }}"
+      impact: "Network packet loss, connectivity issues"
+      action: "Check network cable, switch port, and interface errors"
+
+  - alert: NetworkTransmitErrors
+    expr: |
+      rate(node_network_transmit_errs_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 10
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "Network transmit errors on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value | humanize }} transmit errors/sec (threshold: 10/sec)\nInterface: {{ $labels.device }}"
+      impact: "Network packet loss, connectivity issues"
+      action: "Check network configuration and hardware"
+
+  # ═══════════════════════════════════════════════════════════
+  # NETWORK PACKET DROPS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: NetworkReceiveDrops
+    expr: |
+      rate(node_network_receive_drop_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 100
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "Network receive drops on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value | humanize }} packets dropped/sec (threshold: 100/sec)\nInterface: {{ $labels.device }}"
+      impact: "Packet loss due to buffer overflow or resource constraints"
+      action: "Check network buffer sizes and system load"
+
+  - alert: NetworkTransmitDrops
+    expr: |
+      rate(node_network_transmit_drop_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) > 100
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "Network transmit drops on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "{{ $value | humanize }} packets dropped/sec (threshold: 100/sec)\nInterface: {{ $labels.device }}"
+      impact: "Packet loss on transmission"
+      action: "Check network queue sizes and configuration"
+
+  # ═══════════════════════════════════════════════════════════
+  # NETWORK INTERFACE STATUS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: NetworkInterfaceDown
+    expr: |
+      node_network_up{device!~"lo|veth.*|docker.*|br-.*"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      domain: system
+      category: network
+    annotations:
+      summary: "Network interface down on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Network interface is down\nInterface: {{ $labels.device }}"
+      impact: "Network connectivity lost on this interface"
+      action: "IMMEDIATE: Check interface status with 'ip link show {{ $labels.device }}'"
+
+  # ═══════════════════════════════════════════════════════════
+  # TCP CONNECTION EXHAUSTION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: TCPConnectionsHigh
+    expr: |
+      node_netstat_Tcp_CurrEstab > 10000
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "High number of TCP connections on {{ $labels.instance }}"
+      description: "{{ $value }} established TCP connections (threshold: 10000)\nInstance: {{ $labels.instance }}"
+      impact: "High connection count may indicate connection leak or DDoS"
+      action: "Check for connection leaks with 'ss -s' and 'netstat -an'"
+
+  - alert: TCPTimeWaitHigh
+    expr: |
+      node_sockstat_TCP_tw > 5000
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "High number of TCP TIME_WAIT connections on {{ $labels.instance }}"
+      description: "{{ $value }} TIME_WAIT connections (threshold: 5000)\nInstance: {{ $labels.instance }}"
+      impact: "Port exhaustion possible, may affect new connections"
+      action: "Tune TCP TIME_WAIT settings or investigate connection patterns"
+
+  # ═══════════════════════════════════════════════════════════
+  # NETWORK SATURATION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: NetworkSaturation
+    expr: |
+      (
+        rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) 
+        + 
+        rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m])
+      ) > 900000000
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: network
+    annotations:
+      summary: "Network saturation on {{ $labels.instance }}:{{ $labels.device }}"
+      description: "Total bandwidth: {{ $value | humanize }}B/s (threshold: 900MB/s for 1Gbps link)\nInterface: {{ $labels.device }}"
+      impact: "Network link approaching saturation"
+      action: "Consider upgrading network capacity or optimizing traffic"

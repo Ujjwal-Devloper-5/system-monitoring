@@ -1,0 +1,190 @@
+groups:
+- name: service-monitoring
+  interval: 15s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # MONITORING STACK AVAILABILITY
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: NodeExporterDown
+    expr: |
+      up{job="system-node"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: service
+    annotations:
+      summary: "Node Exporter is down on {{ $labels.instance }}"
+      description: "Cannot scrape host metrics from Node Exporter\nInstance: {{ $labels.instance }}"
+      impact: "No host system metrics available"
+      action: "IMMEDIATE: Check Node Exporter service status"
+
+  - alert: PrometheusDown
+    expr: |
+      up{job="system-prometheus"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      domain: system
+      category: service
+    annotations:
+      summary: "Prometheus is down"
+      description: "Prometheus monitoring service is not responding"
+      impact: "Monitoring and alerting unavailable"
+      action: "IMMEDIATE: Restart Prometheus service"
+
+  - alert: AlertmanagerDown
+    expr: |
+      up{job="system-alertmanager"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: service
+    annotations:
+      summary: "Alertmanager is down"
+      description: "Alertmanager service is not responding"
+      impact: "Alert notifications will not be sent"
+      action: "IMMEDIATE: Restart Alertmanager service"
+
+  - alert: LokiDown
+    expr: |
+      up{job="system-loki"} == 0
+    for: 2m
+    labels:
+      severity: warning
+      domain: system
+      category: service
+    annotations:
+      summary: "Loki is down"
+      description: "Loki log aggregation service is not responding"
+      impact: "Logs are not being collected"
+      action: "Restart Loki service, check logs for errors"
+
+  - alert: GrafanaDown
+    expr: |
+      up{job="system-grafana"} == 0
+    for: 2m
+    labels:
+      severity: warning
+      domain: system
+      category: service
+    annotations:
+      summary: "Grafana is down"
+      description: "Grafana visualization service is not responding"
+      impact: "Dashboards are not accessible"
+      action: "Restart Grafana service"
+
+  - alert: CAdvisorDown
+    expr: |
+      up{job="system-containers"} == 0
+    for: 2m
+    labels:
+      severity: warning
+      domain: system
+      category: service
+    annotations:
+      summary: "cAdvisor is down"
+      description: "cAdvisor container metrics service is not responding"
+      impact: "Container metrics are not available"
+      action: "Restart cAdvisor service"
+
+  # ═══════════════════════════════════════════════════════════
+  # PROMETHEUS HEALTH
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: PrometheusScrapeErrors
+    expr: |
+      rate(prometheus_target_scrapes_exceeded_sample_limit_total[5m]) > 0
+      or
+      rate(prometheus_target_scrapes_sample_duplicate_timestamp_total[5m]) > 0
+      or
+      rate(prometheus_target_scrapes_sample_out_of_bounds_total[5m]) > 0
+      or
+      rate(prometheus_target_scrapes_sample_out_of_order_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: prometheus
+    annotations:
+      summary: "Prometheus scrape errors detected"
+      description: "Prometheus is experiencing scrape errors\nJob: {{ $labels.job }}"
+      impact: "Some metrics may be missing or incorrect"
+      action: "Check Prometheus logs and target configurations"
+
+  - alert: PrometheusTargetDown
+    expr: |
+      up == 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: prometheus
+    annotations:
+      summary: "Prometheus target down: {{ $labels.job }}"
+      description: "Target {{ $labels.instance }} for job {{ $labels.job }} is down"
+      impact: "Metrics not being collected from this target"
+      action: "Check target service status and network connectivity"
+
+  - alert: PrometheusTSDBCompactionsFailing
+    expr: |
+      rate(prometheus_tsdb_compactions_failed_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: prometheus
+    annotations:
+      summary: "Prometheus TSDB compactions failing"
+      description: "Prometheus time-series database compaction failures detected"
+      impact: "Database may grow excessively, performance degradation"
+      action: "Check Prometheus logs and disk space"
+
+  - alert: PrometheusNotConnectedToAlertmanager
+    expr: |
+      prometheus_notifications_alertmanagers_discovered < 1
+    for: 5m
+    labels:
+      severity: critical
+      domain: system
+      category: prometheus
+    annotations:
+      summary: "Prometheus not connected to Alertmanager"
+      description: "Prometheus cannot reach any Alertmanager instances"
+      impact: "Alerts will not be sent"
+      action: "IMMEDIATE: Check Alertmanager connectivity and configuration"
+
+  # ═══════════════════════════════════════════════════════════
+  # ALERTMANAGER HEALTH
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: AlertmanagerConfigReloadFailed
+    expr: |
+      alertmanager_config_last_reload_successful == 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: alertmanager
+    annotations:
+      summary: "Alertmanager configuration reload failed"
+      description: "Alertmanager failed to reload its configuration"
+      impact: "Alert routing may be using old configuration"
+      action: "Check Alertmanager configuration syntax and logs"
+
+  - alert: AlertmanagerNotificationsFailing
+    expr: |
+      rate(alertmanager_notifications_failed_total[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: alertmanager
+    annotations:
+      summary: "Alertmanager notifications failing"
+      description: "Alertmanager is failing to send notifications\nReceiver: {{ $labels.receiver }}"
+      impact: "Alert notifications are not being delivered"
+      action: "Check notification receiver configuration and connectivity"

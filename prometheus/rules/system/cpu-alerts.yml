@@ -1,0 +1,148 @@
+groups:
+- name: cpu-monitoring
+  interval: 30s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # CPU USAGE ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighCPUUsage
+    expr: |
+      (
+        100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+      ) > 80
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+    annotations:
+      summary: "High CPU usage detected on {{ $labels.instance }}"
+      description: "CPU usage is {{ $value | humanizePercentage }} (threshold: 80%)\nInstance: {{ $labels.instance }}"
+      impact: "System performance may be degraded"
+      action: "Check top CPU consuming processes with 'top' or 'htop'"
+
+  - alert: CriticalCPUUsage
+    expr: |
+      (
+        100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+      ) > 95
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: cpu
+    annotations:
+      summary: "CRITICAL: CPU usage extremely high on {{ $labels.instance }}"
+      description: "CPU usage is {{ $value | humanizePercentage }} (threshold: 95%)\nInstance: {{ $labels.instance }}"
+      impact: "System may become unresponsive"
+      action: "IMMEDIATE: Identify and kill resource-intensive processes"
+
+  # ═══════════════════════════════════════════════════════════
+  # CPU I/O WAIT ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighIOWait
+    expr: |
+      avg by (instance) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 20
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+    annotations:
+      summary: "High I/O wait time on {{ $labels.instance }}"
+      description: "I/O wait is {{ $value | humanizePercentage }} (threshold: 20%)\nInstance: {{ $labels.instance }}"
+      impact: "Disk I/O bottleneck affecting CPU performance"
+      action: "Check disk I/O with 'iostat -x 1' and identify slow disks"
+
+  - alert: CriticalIOWait
+    expr: |
+      avg by (instance) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 40
+    for: 5m
+    labels:
+      severity: critical
+      domain: system
+      category: cpu
+    annotations:
+      summary: "CRITICAL: Severe I/O wait on {{ $labels.instance }}"
+      description: "I/O wait is {{ $value | humanizePercentage }} (threshold: 40%)\nInstance: {{ $labels.instance }}"
+      impact: "Severe disk I/O bottleneck, system severely degraded"
+      action: "IMMEDIATE: Check disk health, identify I/O intensive processes"
+
+  # ═══════════════════════════════════════════════════════════
+  # CPU STEAL TIME (Virtualization Issues)
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighCPUStealTime
+    expr: |
+      avg by (instance) (rate(node_cpu_seconds_total{mode="steal"}[5m])) * 100 > 10
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+    annotations:
+      summary: "High CPU steal time on {{ $labels.instance }}"
+      description: "CPU steal time is {{ $value | humanizePercentage }} (threshold: 10%)\nInstance: {{ $labels.instance }}"
+      impact: "Hypervisor is stealing CPU cycles, performance degraded"
+      action: "Contact infrastructure team about host overcommitment"
+
+  # ═══════════════════════════════════════════════════════════
+  # CONTEXT SWITCHING ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighContextSwitching
+    expr: |
+      rate(node_context_switches_total[5m]) > 100000
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+    annotations:
+      summary: "High context switching rate on {{ $labels.instance }}"
+      description: "Context switches: {{ $value | humanize }}/sec (threshold: 100k/sec)\nInstance: {{ $labels.instance }}"
+      impact: "Excessive context switching may indicate too many processes/threads"
+      action: "Check number of running processes and threads"
+
+  # ═══════════════════════════════════════════════════════════
+  # CPU THROTTLING
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: CPUThrottling
+    expr: |
+      rate(node_cpu_seconds_total{mode="throttle"}[5m]) > 0.01
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: cpu
+    annotations:
+      summary: "CPU throttling detected on {{ $labels.instance }}"
+      description: "CPU is being throttled, possibly due to thermal limits\nInstance: {{ $labels.instance }}"
+      impact: "Performance degradation due to thermal throttling"
+      action: "Check CPU temperature and cooling system"
+
+  # ═══════════════════════════════════════════════════════════
+  # PER-CORE CPU IMBALANCE
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: CPUCoreImbalance
+    expr: |
+      (
+        max by (instance) (rate(node_cpu_seconds_total{mode!="idle"}[5m]))
+        -
+        min by (instance) (rate(node_cpu_seconds_total{mode!="idle"}[5m]))
+      ) > 0.5
+    for: 15m
+    labels:
+      severity: info
+      domain: system
+      category: cpu
+    annotations:
+      summary: "CPU core load imbalance on {{ $labels.instance }}"
+      description: "Significant difference in CPU core utilization detected\nInstance: {{ $labels.instance }}"
+      impact: "Workload may not be properly distributed across cores"
+      action: "Check if processes are pinned to specific cores"
