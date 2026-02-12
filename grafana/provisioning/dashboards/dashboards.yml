@@ -1,0 +1,17 @@
+apiVersion: 1
+
+providers:
+  - name: 'System Monitoring Dashboards'
+    orgId: 1
+    folder: 'System Monitoring'
+    type: file
+    # Prevent dashboard modifications in UI to avoid configuration drift
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    # Set to false in production to prevent UI changes
+    # Set to true in development to allow dashboard customization
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: true
+

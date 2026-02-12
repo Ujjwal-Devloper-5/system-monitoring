@@ -1,0 +1,216 @@
+groups:
+- name: system-monitoring
+  interval: 30s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # SYSTEM LOAD ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: SystemLoad1mHigh
+    expr: |
+      node_load1 / count(node_cpu_seconds_total{mode="system"}) without (cpu, mode) > 2
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: load
+    annotations:
+      summary: "High 1-minute load average on {{ $labels.instance }}"
+      description: "Load average (1m): {{ $value | humanize }} (threshold: 2x CPU cores)\nInstance: {{ $labels.instance }}"
+      impact: "System under high load"
+      action: "Check running processes with 'top' or 'htop'"
+
+  - alert: SystemLoad5mHigh
+    expr: |
+      node_load5 / count(node_cpu_seconds_total{mode="system"}) without (cpu, mode) > 1.5
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: load
+    annotations:
+      summary: "High 5-minute load average on {{ $labels.instance }}"
+      description: "Load average (5m): {{ $value | humanize }} (threshold: 1.5x CPU cores)\nInstance: {{ $labels.instance }}"
+      impact: "Sustained high system load"
+      action: "Investigate system resource usage"
+
+  - alert: SystemLoad15mHigh
+    expr: |
+      node_load15 / count(node_cpu_seconds_total{mode="system"}) without (cpu, mode) > 1.5
+    for: 15m
+    labels:
+      severity: critical
+      domain: system
+      category: load
+    annotations:
+      summary: "CRITICAL: Sustained high load on {{ $labels.instance }}"
+      description: "Load average (15m): {{ $value | humanize }} (threshold: 1.5x CPU cores)\nInstance: {{ $labels.instance }}"
+      impact: "System under sustained high load, performance degraded"
+      action: "IMMEDIATE: Reduce system load or add resources"
+
+  # ═══════════════════════════════════════════════════════════
+  # UPTIME MONITORING
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: SystemRebooted
+    expr: |
+      time() - node_boot_time_seconds < 600
+    labels:
+      severity: info
+      domain: system
+      category: uptime
+    annotations:
+      summary: "System recently rebooted: {{ $labels.instance }}"
+      description: "System booted {{ $value | humanizeDuration }} ago\nInstance: {{ $labels.instance }}"
+      impact: "System was recently restarted"
+      action: "Verify reboot was intentional, check logs for crash"
+
+  # ═══════════════════════════════════════════════════════════
+  # TIME SYNCHRONIZATION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: ClockSkewDetected
+    expr: |
+      abs(node_timex_offset_seconds) > 0.05
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: time
+    annotations:
+      summary: "Clock skew detected on {{ $labels.instance }}"
+      description: "Time offset: {{ $value | humanizeDuration }} (threshold: 50ms)\nInstance: {{ $labels.instance }}"
+      impact: "Time synchronization issues, may affect distributed systems"
+      action: "Check NTP/chrony status with 'timedatectl status'"
+
+  - alert: ClockNotSynchronized
+    expr: |
+      node_timex_sync_status == 0
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: time
+    annotations:
+      summary: "Clock not synchronized on {{ $labels.instance }}"
+      description: "System clock is not synchronized with time source\nInstance: {{ $labels.instance }}"
+      impact: "Time drift may occur, affecting logs and distributed systems"
+      action: "Check NTP/chrony service status"
+
+  # ═══════════════════════════════════════════════════════════
+  # PROCESS MONITORING
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: ZombieProcesses
+    expr: |
+      node_processes_state{state="Z"} > 5
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: processes
+    annotations:
+      summary: "Zombie processes detected on {{ $labels.instance }}"
+      description: "{{ $value }} zombie processes (threshold: 5)\nInstance: {{ $labels.instance }}"
+      impact: "Zombie processes indicate parent process issues"
+      action: "Identify and fix parent processes with 'ps aux | grep Z'"
+
+  - alert: TooManyProcesses
+    expr: |
+      node_processes_threads > 10000
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: processes
+    annotations:
+      summary: "High number of processes/threads on {{ $labels.instance }}"
+      description: "{{ $value }} threads running (threshold: 10000)\nInstance: {{ $labels.instance }}"
+      impact: "High process count may indicate resource leak"
+      action: "Check for process leaks or runaway applications"
+
+  # ═══════════════════════════════════════════════════════════
+  # FILE DESCRIPTOR EXHAUSTION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: FileDescriptorsHigh
+    expr: |
+      (
+        node_filefd_allocated / node_filefd_maximum
+      ) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: resources
+    annotations:
+      summary: "High file descriptor usage on {{ $labels.instance }}"
+      description: "File descriptors: {{ $value | humanizePercentage }} (threshold: 80%)\nAllocated: {{ query \"node_filefd_allocated{instance='\" }}{{ $labels.instance }}{{ query \"'}\" | first | value | humanize }}\nMaximum: {{ query \"node_filefd_maximum{instance='\" }}{{ $labels.instance }}{{ query \"'}\" | first | value | humanize }}"
+      impact: "May run out of file descriptors, affecting new connections"
+      action: "Increase file descriptor limit or fix descriptor leaks"
+
+  - alert: FileDescriptorsCritical
+    expr: |
+      (
+        node_filefd_allocated / node_filefd_maximum
+      ) * 100 > 95
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: resources
+    annotations:
+      summary: "CRITICAL: File descriptors almost exhausted on {{ $labels.instance }}"
+      description: "File descriptors: {{ $value | humanizePercentage }} (threshold: 95%)\nInstance: {{ $labels.instance }}"
+      impact: "Cannot open new files or network connections"
+      action: "IMMEDIATE: Increase limits or restart leaking processes"
+
+  # ═══════════════════════════════════════════════════════════
+  # HARDWARE TEMPERATURE
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighCPUTemperature
+    expr: |
+      node_hwmon_temp_celsius{chip=~"coretemp.*|k10temp.*"} > 80
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: hardware
+    annotations:
+      summary: "High CPU temperature on {{ $labels.instance }}"
+      description: "Temperature: {{ $value }}°C (threshold: 80°C)\nSensor: {{ $labels.chip }}\nInstance: {{ $labels.instance }}"
+      impact: "CPU may throttle, performance degradation"
+      action: "Check cooling system, clean dust, verify fans working"
+
+  - alert: CriticalCPUTemperature
+    expr: |
+      node_hwmon_temp_celsius{chip=~"coretemp.*|k10temp.*"} > 90
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: hardware
+    annotations:
+      summary: "CRITICAL: CPU temperature critical on {{ $labels.instance }}"
+      description: "Temperature: {{ $value }}°C (threshold: 90°C)\nSensor: {{ $labels.chip }}"
+      impact: "CPU thermal throttling or shutdown imminent"
+      action: "IMMEDIATE: Shutdown non-critical workloads, check cooling"
+
+  # ═══════════════════════════════════════════════════════════
+  # KERNEL MESSAGES
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: KernelOOMKiller
+    expr: |
+      increase(node_vmstat_oom_kill[10m]) > 0
+    labels:
+      severity: critical
+      domain: system
+      category: kernel
+    annotations:
+      summary: "OOM killer invoked on {{ $labels.instance }}"
+      description: "{{ $value }} processes killed by OOM in last 10 minutes\nInstance: {{ $labels.instance }}"
+      impact: "System ran out of memory, processes terminated"
+      action: "IMMEDIATE: Investigate memory usage, add RAM if needed"

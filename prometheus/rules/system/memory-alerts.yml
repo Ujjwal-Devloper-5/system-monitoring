@@ -1,0 +1,173 @@
+groups:
+- name: memory-monitoring
+  interval: 30s
+  rules:
+
+  # ═══════════════════════════════════════════════════════════
+  # MEMORY USAGE ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: HighMemoryUsage
+    expr: |
+      (
+        1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+      ) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+    annotations:
+      summary: "High memory usage on {{ $labels.instance }}"
+      description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 80%)\nAvailable: {{ query \"node_memory_MemAvailable_bytes{instance='\" }}{{ $labels.instance }}{{ query \"'}\" | first | value | humanize1024 }}B\nTotal: {{ query \"node_memory_MemTotal_bytes{instance='\" }}{{ $labels.instance }}{{ query \"'}\" | first | value | humanize1024 }}B"
+      impact: "System may start using swap, performance degradation likely"
+      action: "Identify memory-intensive processes with 'ps aux --sort=-%mem | head'"
+
+  - alert: CriticalMemoryUsage
+    expr: |
+      (
+        1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+      ) * 100 > 95
+    for: 2m
+    labels:
+      severity: critical
+      domain: system
+      category: memory
+    annotations:
+      summary: "CRITICAL: Memory almost exhausted on {{ $labels.instance }}"
+      description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 95%)\nInstance: {{ $labels.instance }}"
+      impact: "OOM killer may start terminating processes"
+      action: "IMMEDIATE: Free up memory or add more RAM"
+
+  # ═══════════════════════════════════════════════════════════
+  # SWAP USAGE ALERTS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: SwapUsageHigh
+    expr: |
+      (
+        1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)
+      ) * 100 > 50
+    for: 10m
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+    annotations:
+      summary: "High swap usage on {{ $labels.instance }}"
+      description: "Swap usage is {{ $value | humanizePercentage }} (threshold: 50%)\nInstance: {{ $labels.instance }}"
+      impact: "System is swapping, significant performance degradation"
+      action: "Reduce memory usage or increase RAM"
+
+  - alert: SwapUsageCritical
+    expr: |
+      (
+        1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)
+      ) * 100 > 80
+    for: 5m
+    labels:
+      severity: critical
+      domain: system
+      category: memory
+    annotations:
+      summary: "CRITICAL: Swap almost full on {{ $labels.instance }}"
+      description: "Swap usage is {{ $value | humanizePercentage }} (threshold: 80%)\nInstance: {{ $labels.instance }}"
+      impact: "System severely degraded, may become unresponsive"
+      action: "IMMEDIATE: Kill memory-intensive processes"
+
+  # ═══════════════════════════════════════════════════════════
+  # SWAP ACTIVITY (Thrashing)
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: MemorySwapThrashing
+    expr: |
+      rate(node_vmstat_pswpin[5m]) + rate(node_vmstat_pswpout[5m]) > 1000
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+    annotations:
+      summary: "Memory swap thrashing on {{ $labels.instance }}"
+      description: "High swap I/O activity detected: {{ $value | humanize }} pages/sec\nInstance: {{ $labels.instance }}"
+      impact: "System is thrashing, severe performance degradation"
+      action: "Reduce memory pressure immediately"
+
+  # ═══════════════════════════════════════════════════════════
+  # OOM KILLS
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: OOMKillDetected
+    expr: |
+      increase(node_vmstat_oom_kill[5m]) > 0
+    labels:
+      severity: critical
+      domain: system
+      category: memory
+    annotations:
+      summary: "OOM killer activated on {{ $labels.instance }}"
+      description: "{{ $value }} process(es) killed by OOM killer in last 5 minutes\nInstance: {{ $labels.instance }}"
+      impact: "Processes are being killed due to memory exhaustion"
+      action: "IMMEDIATE: Investigate memory usage, add RAM, or reduce workload"
+
+  # ═══════════════════════════════════════════════════════════
+  # MEMORY PRESSURE
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: MemoryPressureHigh
+    expr: |
+      rate(node_vmstat_pgmajfault[5m]) > 100
+    for: 5m
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+    annotations:
+      summary: "High memory pressure on {{ $labels.instance }}"
+      description: "Major page faults: {{ $value | humanize }}/sec (threshold: 100/sec)\nInstance: {{ $labels.instance }}"
+      impact: "Memory pressure causing page faults, performance impact"
+      action: "Monitor memory usage trends, consider adding RAM"
+
+  # ═══════════════════════════════════════════════════════════
+  # CACHE/BUFFER PRESSURE
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: LowCacheMemory
+    expr: |
+      (
+        node_memory_Cached_bytes / node_memory_MemTotal_bytes
+      ) * 100 < 5
+    for: 10m
+    labels:
+      severity: info
+      domain: system
+      category: memory
+    annotations:
+      summary: "Low cache memory on {{ $labels.instance }}"
+      description: "Cache memory is only {{ $value | humanizePercentage }} of total (threshold: <5%)\nInstance: {{ $labels.instance }}"
+      impact: "Reduced file system caching, potential I/O performance impact"
+      action: "Memory pressure is high, consider reducing workload"
+
+  # ═══════════════════════════════════════════════════════════
+  # MEMORY LEAK DETECTION
+  # ═══════════════════════════════════════════════════════════
+
+  - alert: PossibleMemoryLeak
+    expr: |
+      (
+        (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) 
+        / 
+        node_memory_MemTotal_bytes
+      ) > 0.9
+      and
+      deriv(node_memory_MemAvailable_bytes[1h]) < -1073741824  # -1GB per hour
+    for: 2h
+    labels:
+      severity: warning
+      domain: system
+      category: memory
+    annotations:
+      summary: "Possible memory leak on {{ $labels.instance }}"
+      description: "Memory usage continuously increasing over time\nInstance: {{ $labels.instance }}"
+      impact: "Potential memory leak in application"
+      action: "Investigate long-running processes for memory leaks"

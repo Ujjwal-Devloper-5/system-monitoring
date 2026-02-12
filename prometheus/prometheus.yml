@@ -1,0 +1,112 @@
+global:
+  scrape_interval: 30s
+  scrape_timeout: 25s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'system-monitoring'
+    environment: 'production'
+
+# ═══════════════════════════════════════════════════════════
+# ALERTMANAGER INTEGRATION
+# ═══════════════════════════════════════════════════════════
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+
+# ═══════════════════════════════════════════════════════════
+# ALERT RULES
+# ═══════════════════════════════════════════════════════════
+rule_files:
+  - "/prometheus/rules/system/*.yml"
+
+# ═══════════════════════════════════════════════════════════
+# SCRAPE CONFIGURATIONS
+# ═══════════════════════════════════════════════════════════
+scrape_configs:
+
+  # ─────────────────────────
+  # PROMETHEUS SELF-MONITORING
+  # ─────────────────────────
+  - job_name: "system-prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+        labels:
+          domain: system
+          component: prometheus
+
+  # ─────────────────────────
+  # HOST SYSTEM METRICS (Node Exporter)
+  # ─────────────────────────
+  # Note: On Linux, use Docker bridge IP (172.17.0.1) to access host services
+  # Node Exporter must be running on host: sudo systemctl status node_exporter
+  - job_name: "system-node"
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          domain: system
+          layer: host
+          component: node-exporter
+    metric_relabel_configs:
+      # Drop unnecessary high-cardinality metrics
+      - source_labels: [__name__]
+        regex: 'node_network_transmit_queue_length|node_network_iface_.*'
+        action: drop
+
+  # ─────────────────────────
+  # CONTAINER RESOURCE METRICS (cAdvisor)
+  # ─────────────────────────
+  - job_name: "system-containers"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          domain: system
+          layer: container
+          component: cadvisor
+    metric_relabel_configs:
+      # Keep only necessary container metrics
+      - source_labels: [__name__]
+        regex: 'container_(cpu|memory|network|fs).*'
+        action: keep
+
+  # ─────────────────────────
+  # ALERTMANAGER MONITORING
+  # ─────────────────────────
+  - job_name: "system-alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels:
+          domain: system
+          component: alertmanager
+
+  # ─────────────────────────
+  # LOKI MONITORING
+  # ─────────────────────────
+  - job_name: "system-loki"
+    static_configs:
+      - targets: ["loki:3100"]
+        labels:
+          domain: system
+          component: loki
+
+  # ─────────────────────────
+  # GRAFANA MONITORING
+  # ─────────────────────────
+  - job_name: "system-grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          domain: system
+          component: grafana
+
+  # ─────────────────────────
+  # PROMTAIL MONITORING
+  # ─────────────────────────
+  - job_name: "system-promtail"
+    static_configs:
+      - targets: ["promtail:9080"]
+        labels:
+          domain: system
+          component: promtail
+
